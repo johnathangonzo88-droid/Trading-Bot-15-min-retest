@@ -73,9 +73,18 @@ def generate_signals(
     pivot_right: int = 5,
     retest_window: int = 20,
     retest_tolerance: float = 0.10,  # +/- 10% of leg range around the 50% line
+    volume_multiplier: float = None,  # e.g. 1.5 = breakout volume must be >=1.5x the rolling average. None disables the filter.
+    volume_ma_window: int = 20,
 ) -> pd.DataFrame:
     df = find_pivots(df, pivot_left, pivot_right)
     n = len(df)
+
+    # Rolling average volume, computed from PRIOR candles only (shifted by 1)
+    # so the breakout candle is compared against history, not against itself.
+    if volume_multiplier is not None:
+        vol_ma = df["volume"].rolling(volume_ma_window).mean().shift(1)
+    else:
+        vol_ma = None
 
     signals = [None] * n  # "long_entry" / "short_entry" / "long_invalid" / "short_invalid"
 
@@ -106,7 +115,12 @@ def generate_signals(
 
         # ---------------- LONG side ----------------
         if long_state is None and last_pivot_high is not None and prior_pivot_low_before_high is not None:
-            if row["close"] > last_pivot_high:
+            volume_ok = True
+            if volume_multiplier is not None:
+                avg_vol = vol_ma.iloc[i]
+                volume_ok = pd.notna(avg_vol) and row["volume"] >= volume_multiplier * avg_vol
+
+            if row["close"] > last_pivot_high and volume_ok:
                 leg_range = last_pivot_high - prior_pivot_low_before_high
                 if leg_range > 0:
                     long_breakout_level = last_pivot_high
@@ -136,7 +150,12 @@ def generate_signals(
 
         # ---------------- SHORT side ----------------
         if short_state is None and last_pivot_low is not None and prior_pivot_high_before_low is not None:
-            if row["close"] < last_pivot_low:
+            volume_ok = True
+            if volume_multiplier is not None:
+                avg_vol = vol_ma.iloc[i]
+                volume_ok = pd.notna(avg_vol) and row["volume"] >= volume_multiplier * avg_vol
+
+            if row["close"] < last_pivot_low and volume_ok:
                 leg_range = prior_pivot_high_before_low - last_pivot_low
                 if leg_range > 0:
                     short_breakout_level = last_pivot_low
@@ -278,6 +297,13 @@ if __name__ == "__main__":
     parser.add_argument("--retest-window", type=int, default=20)
     parser.add_argument("--retest-tolerance", type=float, default=0.10)
     parser.add_argument("--rr-target", type=float, default=2.0)
+    parser.add_argument(
+        "--volume-multiplier",
+        type=float,
+        default=None,
+        help="Require breakout volume >= this multiple of the rolling average (e.g. 1.5). Omit to disable the filter.",
+    )
+    parser.add_argument("--volume-ma-window", type=int, default=20)
     args = parser.parse_args()
 
     if args.csv:
@@ -293,6 +319,8 @@ if __name__ == "__main__":
         pivot_right=args.pivot_right,
         retest_window=args.retest_window,
         retest_tolerance=args.retest_tolerance,
+        volume_multiplier=args.volume_multiplier,
+        volume_ma_window=args.volume_ma_window,
     )
 
     entries = signals_df[signals_df["signal"].isin(["long_entry", "short_entry"])]
