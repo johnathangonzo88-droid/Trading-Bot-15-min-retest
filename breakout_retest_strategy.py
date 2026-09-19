@@ -256,7 +256,13 @@ def load_yfinance(ticker: str) -> pd.DataFrame:
 
     # yfinance only allows ~60 days of history at 15m resolution
     data = yf.download(ticker, period="60d", interval="15m", progress=False)
-    data.columns = [c.lower() for c in data.columns]
+
+    # Newer yfinance versions return MultiIndex columns (e.g. ('Open', 'AAPL'))
+    # even for a single ticker. Flatten to plain column names either way.
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
+    data.columns = [str(c).lower() for c in data.columns]
+
     return data[["open", "high", "low", "close", "volume"]]
 
 
