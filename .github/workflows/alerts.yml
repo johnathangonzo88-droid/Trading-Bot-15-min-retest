@@ -2,7 +2,7 @@ name: Breakout Retest Alerts
 
 on:
   schedule:
-    - cron: "*/15 13-20 * * 1-5"
+    - cron: "*/15 * * * 1-5"
   workflow_dispatch: {}
 
 permissions:
@@ -27,7 +27,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python live_alert_bot.py \
-            --tickers MES=F,MNQ=F,MYM=F \
+            --tickers MES=F,MNQ=F,MYM=F,EURUSD=X,GBPJPY=X \
             --once \
             --telegram-token "$TELEGRAM_TOKEN" \
             --telegram-chat-id "$TELEGRAM_CHAT_ID"
