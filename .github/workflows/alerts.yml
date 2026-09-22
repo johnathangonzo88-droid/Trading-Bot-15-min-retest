@@ -27,7 +27,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python live_alert_bot.py \
-            --tickers AAPL,MSFT \
+            --tickers MES=F,MNQ=F,MYM=F \
             --once \
             --telegram-token "$TELEGRAM_TOKEN" \
             --telegram-chat-id "$TELEGRAM_CHAT_ID"
