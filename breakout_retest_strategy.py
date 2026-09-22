@@ -79,6 +79,18 @@ def generate_signals(
     df = find_pivots(df, pivot_left, pivot_right)
     n = len(df)
 
+    # Some instruments (e.g. yfinance FX tickers) never report real volume,
+    # which would otherwise silently block every signal forever. Disable
+    # the filter for this run rather than fail closed.
+    if volume_multiplier is not None:
+        volume_usable = df["volume"].notna().any() and (df["volume"] > 0).any()
+        if not volume_usable:
+            print(
+                "Warning: volume data is unavailable (all NaN/zero) for this "
+                "instrument — disabling the volume filter for this run."
+            )
+            volume_multiplier = None
+
     # Rolling average volume, computed from PRIOR candles only (shifted by 1)
     # so the breakout candle is compared against history, not against itself.
     if volume_multiplier is not None:
@@ -133,12 +145,13 @@ def generate_signals(
             tol = retest_tolerance * (long_breakout_level - long_retest_level)
             zone_hi, zone_lo = long_retest_level + tol, long_retest_level - tol
 
-            # Invalidation: closes back below the broken level (failed breakout)
-            if row["close"] < long_retest_level - 2 * tol:
+            # Invalidation: closes back below the original swing high (breakout level)
+            if row["close"] < long_breakout_level:
                 signals[i] = "long_invalid"
                 long_state = None
 
-            # Touch the retest zone
+            # Touch the retest zone (intentionally asymmetric: a wick may dip
+            # all the way to the invalidation line and still confirm on close)
             elif row["low"] <= zone_hi and row["low"] >= zone_lo - tol:
                 # Confirmation candle: bullish close, back above the zone
                 if row["close"] > row["open"] and row["close"] >= long_retest_level:
@@ -168,7 +181,8 @@ def generate_signals(
             tol = retest_tolerance * (short_retest_level - short_breakout_level)
             zone_hi, zone_lo = short_retest_level + tol, short_retest_level - tol
 
-            if row["close"] > short_retest_level + 2 * tol:
+            # Invalidation: closes back above the original swing low (breakout level)
+            if row["close"] > short_breakout_level:
                 signals[i] = "short_invalid"
                 short_state = None
 
