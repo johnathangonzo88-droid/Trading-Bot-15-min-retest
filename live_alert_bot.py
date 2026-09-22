@@ -50,6 +50,25 @@ STATE_FILE_DEFAULT = "alert_state.json"
 
 
 # ----------------------------------------------------------------------
+# Candle-close guard — never signal off a bar that's still forming
+# ----------------------------------------------------------------------
+def drop_unclosed_candle(data: pd.DataFrame, candle_minutes: int = 15) -> pd.DataFrame:
+    """Drop the last row if that candle hasn't actually closed yet.
+
+    A scheduled run can land mid-candle, and yfinance's last row is then
+    the currently-forming bar, not a closed one — signaling off it risks
+    alerting on data that can still change before the candle closes.
+    """
+    if data.empty:
+        return data
+    last_ts = data.index[-1]
+    now = datetime.now(last_ts.tzinfo) if last_ts.tzinfo is not None else datetime.utcnow()
+    if last_ts + pd.Timedelta(minutes=candle_minutes) > now:
+        return data.iloc[:-1]
+    return data
+
+
+# ----------------------------------------------------------------------
 # State persistence — tracks the last alerted candle per ticker so we
 # never send the same signal twice across runs.
 # ----------------------------------------------------------------------
@@ -118,6 +137,8 @@ def check_ticker(ticker: str, state: dict, args) -> None:
     except Exception as e:
         print(f"[{ticker}] failed to fetch data: {e}")
         return
+
+    data = drop_unclosed_candle(data)
 
     if data.empty or len(data) < (args.pivot_left + args.pivot_right + 10):
         print(f"[{ticker}] not enough data yet, skipping")
