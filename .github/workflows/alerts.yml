@@ -3,7 +3,12 @@ name: Breakout Retest Alerts
 on:
   schedule:
     - cron: "*/15 * * * 1-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (log signals instead of sending to Telegram)"
+        required: false
+        default: "false"
 
 concurrency:
   group: breakout-retest-alerts
@@ -25,25 +30,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run alert check
+      - name: Run breakout-retest signal bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          # Tickers narrowed to ES/NQ — the only two instruments this
-          # strategy has actually been backtested and validated on
-          # (see OPTIMIZATION_REPORT.md / COMBINED_ES_NQ_REPORT.md).
-          # Swap in MES=F,MNQ=F for the micro contracts if you're sizing
-          # smaller — same price action, 1/10th the point value.
-          # Strategy params are left at their validated defaults
-          # (pivot=7, retest_window=25, tolerance=0.15, rr_target=2.5,
-          # no session filter) baked into live_alert_bot.py; override with
-          # extra flags here only if you've re-validated a different config.
-          python live_alert_bot.py \
-            --tickers ES=F,NQ=F \
-            --once \
-            --telegram-token "$TELEGRAM_TOKEN" \
-            --telegram-chat-id "$TELEGRAM_CHAT_ID"
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        # Symbols (ES=F, NQ=F) and strategy params (pivot=7, retest_window=25,
+        # tolerance=0.15, rr_target=2.5, no session filter) are the validated
+        # defaults baked into the SYMBOLS list at the top of
+        # breakout_retest_signal_bot.py — edit that file to change them.
+        run: python breakout_retest_signal_bot.py
 
       - name: Save alert state back to the repo
         run: |
