@@ -6,7 +6,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: alert-bot
+  group: breakout-retest-alerts
   cancel-in-progress: false
 
 permissions:
@@ -30,8 +30,17 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          # Tickers narrowed to ES/NQ — the only two instruments this
+          # strategy has actually been backtested and validated on
+          # (see OPTIMIZATION_REPORT.md / COMBINED_ES_NQ_REPORT.md).
+          # Swap in MES=F,MNQ=F for the micro contracts if you're sizing
+          # smaller — same price action, 1/10th the point value.
+          # Strategy params are left at their validated defaults
+          # (pivot=7, retest_window=25, tolerance=0.15, rr_target=2.5,
+          # no session filter) baked into live_alert_bot.py; override with
+          # extra flags here only if you've re-validated a different config.
           python live_alert_bot.py \
-            --tickers MES=F,MNQ=F,MYM=F,EURUSD=X,GBPJPY=X \
+            --tickers ES=F,NQ=F \
             --once \
             --telegram-token "$TELEGRAM_TOKEN" \
             --telegram-chat-id "$TELEGRAM_CHAT_ID"
